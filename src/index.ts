@@ -16,7 +16,22 @@ import {
 } from "./tripletex-transform.js";
 import { registerSkills } from "./skills/registry.js";
 
-const client = new TripletexClient();
+// Lazy-init client so the HTTP server can start and pass healthchecks
+// even before Tripletex tokens are configured.
+let _client: TripletexClient | null = null;
+function getClient(): TripletexClient {
+  if (!_client) {
+    _client = new TripletexClient();
+  }
+  return _client;
+}
+// Keep a `client` getter for minimal diff in tool handlers
+const client = new Proxy({} as TripletexClient, {
+  get(_target, prop) {
+    return (getClient() as any)[prop];
+  },
+});
+
 const server = new McpServer({
   name: "tripletex",
   version: "2.0.0",
