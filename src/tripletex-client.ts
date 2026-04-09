@@ -29,11 +29,11 @@ export class TripletexClient {
   private session: SessionToken | null = null;
 
   constructor() {
-    const consumer = process.env.TRIPLETEX_CONSUMER_TOKEN;
+    const consumer = process.env.TRIPLETEX_CONSUMER_TOKEN || "0";
     const employee = process.env.TRIPLETEX_EMPLOYEE_TOKEN;
-    if (!consumer || !employee) {
+    if (!employee) {
       throw new Error(
-        "Missing TRIPLETEX_CONSUMER_TOKEN or TRIPLETEX_EMPLOYEE_TOKEN env vars"
+        "Missing TRIPLETEX_EMPLOYEE_TOKEN env var. TRIPLETEX_CONSUMER_TOKEN is optional (defaults to '0')."
       );
     }
     this.consumerToken = consumer;
