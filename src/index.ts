@@ -30,6 +30,10 @@ const client = new Proxy({} as TripletexClient, {
   get(_target, prop) {
     return (getClient() as any)[prop];
   },
+  set(_target, prop, value) {
+    (getClient() as any)[prop] = value;
+    return true;
+  },
 });
 
 const server = new McpServer({
