@@ -52,10 +52,22 @@ search_invoices  { invoiceDateFrom: "2026-01-01", invoiceDateTo: "2026-12-31", f
 
 ### 1. Hent API-nøkler fra Tripletex
 
-Du trenger to tokens:
+Det finnes to måter å autentisere på. Lager du en integrasjon til ditt eget selskap, bruk den første — da slipper du consumer token helt.
+
+**A) Intern integrasjon (ett selskap eller konsern) — anbefalt**
+
+En bruker med admin-rettigheter oppretter en JWT under **Selskap → API-tokens** i Tripletex. Hemmeligheten vises bare én gang, så ta vare på den med en gang. Sett den som `TRIPLETEX_JWT`. Ingen consumer token, ingen søknad til Tripletex.
+
+Krever at Integrasjoner-modulen er aktiv på kontoen.
+
+**B) Kommersiell integrasjon (flere kunder)**
 
 - **Consumer token** — søk om produksjonstilgang via [developer.tripletex.no](https://developer.tripletex.no). Godkjenning tar typisk 2–3 uker. For testing kan du opprette en gratis testkonto med egne tokens.
-- **Employee token** — opprettes i Tripletex under **Innstillinger → Integrasjoner → API-tilgang** av en bruker med admin-rettigheter.
+- **Employee token** — opprettes av hver sluttkunde i Tripletex under **Innstillinger → Integrasjoner → API-tilgang**.
+
+Settes som `TRIPLETEX_CONSUMER_TOKEN` + `TRIPLETEX_EMPLOYEE_TOKEN`.
+
+> Tokens for testmiljøet (`api-test.tripletex.tech`) virker ikke i produksjon (`tripletex.no`), og omvendt.
 
 ### 2. Installer
 
@@ -80,8 +92,7 @@ Legg til følgende i Claude Desktop sin konfigurasjonsfil:
       "command": "node",
       "args": ["/absolutt/sti/til/tripletex-mcp/dist/index.js"],
       "env": {
-        "TRIPLETEX_CONSUMER_TOKEN": "din-consumer-token",
-        "TRIPLETEX_EMPLOYEE_TOKEN": "din-employee-token"
+        "TRIPLETEX_JWT": "din-jwt-hemmelighet"
       }
     }
   }
@@ -100,13 +111,26 @@ i `env`-blokken.
 
 ## Hvordan autentisering fungerer
 
-Serveren håndterer alt automatisk:
+Serveren håndterer alt automatisk. Ved første kall opprettes en session token:
 
-1. Ved første kall opprettes en session token via `PUT /v2/token/session/:create`
-2. Session token fornyes automatisk når den utløper (midnatt CET)
-3. Alle API-kall bruker Basic Auth med brukernavn `0` og session token som passord
+- **Med `TRIPLETEX_JWT`:** `POST /v2/token/session/:createFromRefreshToken` med `{ refreshToken, ttlSeconds }`. Levetiden er 12 timer som standard, og kan overstyres med `TRIPLETEX_SESSION_TTL_SECONDS`.
+- **Med consumer + employee token:** `PUT /v2/token/session/:create`. Disse utløper ved midnatt CET.
 
-Du trenger ikke tenke på dette — bare sett consumer og employee token som miljøvariabler.
+Session token fornyes automatisk når den utløper, og ved 401 forsøkes kallet på nytt med fersk token. Alle API-kall bruker Basic Auth med brukernavn `0` og session token som passord.
+
+Du trenger ikke tenke på dette — bare sett miljøvariablene.
+
+### Miljøvariabler
+
+| Variabel | Hva |
+|---|---|
+| `TRIPLETEX_JWT` | JWT-hemmelighet fra **Selskap → API-tokens** (intern integrasjon) |
+| `TRIPLETEX_CONSUMER_TOKEN` | Consumer token (kommersiell integrasjon) |
+| `TRIPLETEX_EMPLOYEE_TOKEN` | Employee token (kommersiell integrasjon) |
+| `TRIPLETEX_ENV` | `test` for `api-test.tripletex.tech`. Utelates i produksjon |
+| `TRIPLETEX_SESSION_TTL_SECONDS` | Levetid på session token i JWT-flyten. Standard `43200` (12 t) |
+| `MCP_TRANSPORT` | `http` for Railway/remote (endepunkt `/mcp`). Standard `stdio` |
+| `PORT` | Port i HTTP-modus. Settes automatisk av Railway |
 
 ## Eksempler på bruk
 

@@ -8,8 +8,14 @@ const TEST_BASE = "https://api-test.tripletex.tech/v2";
 
 interface SessionToken {
   token: string;
-  expiresAt: string;
+  /** Epoch ms when we stop reusing this token and create a new one. */
+  expiresAtMs: number;
 }
+
+/** Session lifetime for the JWT flow. Tripletex lets us pick; 12h is plenty. */
+const DEFAULT_TTL_SECONDS = 12 * 60 * 60;
+/** Renew a little early so a long request never runs past the expiry. */
+const RENEW_MARGIN_MS = 60 * 1000;
 
 export class TripletexApiError extends Error {
   constructor(
@@ -23,26 +29,96 @@ export class TripletexApiError extends Error {
 }
 
 export class TripletexClient {
+  private refreshToken: string;
   private consumerToken: string;
   private employeeToken: string;
+  private ttlSeconds: number;
   private baseUrl: string;
   private session: SessionToken | null = null;
 
   constructor() {
-    const consumer = process.env.TRIPLETEX_CONSUMER_TOKEN || "0";
-    const employee = process.env.TRIPLETEX_EMPLOYEE_TOKEN;
-    if (!employee) {
+    // Two ways to authenticate, see
+    // https://developer.tripletex.no/docs/documentation/authentication-and-tokens/
+    //
+    //   1. Internal integration (one company / company group): a user-admin
+    //      creates a JWT under Selskap -> API-tokens in Tripletex. No consumer
+    //      token, and no application to Tripletex. This is the simple path.
+    //   2. Commercial integration (many customers): consumer token from
+    //      Tripletex + an employee token created by each end customer.
+    const refresh =
+      process.env.TRIPLETEX_JWT || process.env.TRIPLETEX_REFRESH_TOKEN || "";
+    const consumer = process.env.TRIPLETEX_CONSUMER_TOKEN || "";
+    const employee = process.env.TRIPLETEX_EMPLOYEE_TOKEN || "";
+    if (!refresh && !employee) {
       throw new Error(
-        "Missing TRIPLETEX_EMPLOYEE_TOKEN env var. TRIPLETEX_CONSUMER_TOKEN is optional (defaults to '0')."
+        "Missing Tripletex credentials. Set TRIPLETEX_JWT (internal integration: " +
+          "Selskap -> API-tokens in Tripletex), or TRIPLETEX_CONSUMER_TOKEN + " +
+          "TRIPLETEX_EMPLOYEE_TOKEN (commercial integration)."
       );
     }
+    this.refreshToken = refresh;
     this.consumerToken = consumer;
     this.employeeToken = employee;
+    this.ttlSeconds =
+      Number(process.env.TRIPLETEX_SESSION_TTL_SECONDS) || DEFAULT_TTL_SECONDS;
     this.baseUrl =
       process.env.TRIPLETEX_ENV === "test" ? TEST_BASE : PROD_BASE;
   }
 
   private async createSession(): Promise<void> {
+    this.session = this.refreshToken
+      ? await this.createSessionFromJwt()
+      : await this.createSessionFromTokenPair();
+  }
+
+  /** Internal integration: exchange the JWT secret for a session token. */
+  private async createSessionFromJwt(): Promise<SessionToken> {
+    const res = await fetch(
+      `${this.baseUrl}/token/session/:createFromRefreshToken`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          refreshToken: this.refreshToken,
+          ttlSeconds: this.ttlSeconds,
+        }),
+      }
+    );
+    const text = await res.text();
+    if (!res.ok) {
+      throw new TripletexApiError(
+        `Session create from JWT failed (${res.status})`,
+        res.status,
+        text
+      );
+    }
+    // Tripletex wraps most responses in { value: ... }; accept both shapes.
+    let parsed: { value?: { token?: string }; token?: string };
+    try {
+      parsed = JSON.parse(text) as typeof parsed;
+    } catch {
+      throw new TripletexApiError(
+        "Session create from JWT returned non-JSON",
+        res.status,
+        text
+      );
+    }
+    const token = parsed.value?.token ?? parsed.token;
+    if (!token) {
+      throw new TripletexApiError(
+        "Session create from JWT returned no token",
+        res.status,
+        text
+      );
+    }
+    return {
+      token,
+      expiresAtMs: Date.now() + this.ttlSeconds * 1000 - RENEW_MARGIN_MS,
+    };
+  }
+
+  /** Commercial integration: consumer token + employee token. */
+  private async createSessionFromTokenPair(): Promise<SessionToken> {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const expDate = tomorrow.toISOString().split("T")[0];
@@ -59,15 +135,16 @@ export class TripletexClient {
       );
     }
     const data = (await res.json()) as { value: { token: string } };
-    this.session = {
+    // These tokens expire at midnight CET on expirationDate, so treat the start
+    // of that date as the cutoff — the 401 retry covers the remaining slack.
+    return {
       token: data.value.token,
-      expiresAt: expDate,
+      expiresAtMs: new Date(`${expDate}T00:00:00`).getTime(),
     };
   }
 
   private async ensureSession(): Promise<string> {
-    const now = new Date().toISOString().split("T")[0];
-    if (!this.session || this.session.expiresAt <= now) {
+    if (!this.session || this.session.expiresAtMs <= Date.now()) {
       await this.createSession();
     }
     return this.session!.token;
