@@ -224,6 +224,7 @@ server.tool(
     invoiceDateFrom: z.string().describe("YYYY-MM-DD"),
     invoiceDateTo: z.string().describe("YYYY-MM-DD"),
     customerId: z.number().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     isCredited: z.boolean().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -234,6 +235,7 @@ server.tool(
         invoiceDateFrom: args.invoiceDateFrom,
         invoiceDateTo: args.invoiceDateTo,
         customerId: args.customerId,
+        fields: args.fields,
         isCredited: args.isCredited,
         from: args.from,
         count: args.count ?? 25,
@@ -248,6 +250,7 @@ server.tool(
   {
     invoiceDateFrom: z.string().describe("YYYY-MM-DD"),
     invoiceDateTo: z.string().describe("YYYY-MM-DD"),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     supplierId: z.number().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -257,11 +260,43 @@ server.tool(
       const params = optionalParams({
         invoiceDateFrom: args.invoiceDateFrom,
         invoiceDateTo: args.invoiceDateTo,
+        fields: args.fields,
         supplierId: args.supplierId,
         from: args.from,
         count: args.count ?? 25,
       });
       return client.get("/supplierInvoice", params);
+    })
+);
+
+server.tool(
+  "search_orders",
+  "Search orders by order date range. Use isClosed=false for open (not yet invoiced) orders.",
+  {
+    orderDateFrom: z.string().describe("YYYY-MM-DD"),
+    orderDateTo: z.string().describe("YYYY-MM-DD"),
+    customerId: z.number().optional(),
+    isClosed: z.boolean().optional(),
+    isSubscription: z.boolean().optional(),
+    number: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
+    from: z.number().optional(),
+    count: z.number().optional(),
+  },
+  async (args) =>
+    run(() => {
+      const params = optionalParams({
+        orderDateFrom: args.orderDateFrom,
+        orderDateTo: args.orderDateTo,
+        customerId: args.customerId,
+        isClosed: args.isClosed,
+        isSubscription: args.isSubscription,
+        number: args.number,
+        fields: args.fields,
+        from: args.from,
+        count: args.count ?? 25,
+      });
+      return client.get("/order", params);
     })
 );
 
@@ -276,6 +311,7 @@ server.tool(
     query: z.string().optional(),
     customerNumber: z.string().optional(),
     email: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     isActive: z.boolean().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -286,6 +322,7 @@ server.tool(
         name: args.query,
         customerNumber: args.customerNumber,
         email: args.email,
+        fields: args.fields,
         isActive: args.isActive,
         from: args.from,
         count: args.count ?? 25,
@@ -381,6 +418,7 @@ server.tool(
   {
     query: z.string().optional(),
     number: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     isInactive: z.boolean().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -390,6 +428,7 @@ server.tool(
       const params = optionalParams({
         name: args.query,
         number: args.number,
+        fields: args.fields,
         isInactive: args.isInactive,
         from: args.from,
         count: args.count ?? 25,
@@ -432,6 +471,7 @@ server.tool(
   "Search suppliers (query → name).",
   {
     query: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     organizationNumber: z.string().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -440,6 +480,7 @@ server.tool(
     run(() => {
       const params = optionalParams({
         name: args.query,
+        fields: args.fields,
         organizationNumber: args.organizationNumber,
         from: args.from,
         count: args.count ?? 25,
@@ -482,6 +523,7 @@ server.tool(
   {
     query: z.string().optional(),
     numberFrom: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     numberTo: z.string().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -491,6 +533,7 @@ server.tool(
       const params = optionalParams({
         name: args.query,
         numberFrom: args.numberFrom,
+        fields: args.fields,
         numberTo: args.numberTo,
         from: args.from,
         count: args.count ?? 50,
@@ -546,6 +589,7 @@ server.tool(
     dateFrom: z.string(),
     dateTo: z.string(),
     numberFrom: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     numberTo: z.string().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -556,6 +600,7 @@ server.tool(
         dateFrom: args.dateFrom,
         dateTo: args.dateTo,
         numberFrom: args.numberFrom,
+        fields: args.fields,
         numberTo: args.numberTo,
         from: args.from,
         count: args.count ?? 25,
@@ -595,6 +640,7 @@ server.tool(
     departmentId: z.number().optional(),
     projectId: z.number().optional(),
     includeSubProjects: z.boolean().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     activeAccountsWithoutMovements: z.boolean().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -611,6 +657,7 @@ server.tool(
         departmentId: args.departmentId,
         projectId: args.projectId,
         includeSubProjects: args.includeSubProjects,
+        fields: args.fields,
         activeAccountsWithoutMovements: args.activeAccountsWithoutMovements,
         from: args.from,
         count: args.count ?? 1000,
@@ -625,18 +672,32 @@ server.tool(
 
 server.tool(
   "search_projects",
-  "Search projects (query → name).",
+  "Search projects (query → name). Supports Tripletex filters (isClosed, customerId, projectManagerId, number) and fields expansion.",
   {
     query: z.string().optional(),
+    number: z.string().optional(),
+    isClosed: z.boolean().optional(),
+    isOffer: z.boolean().optional(),
+    customerId: z.number().optional(),
+    projectManagerId: z.number().optional(),
+    departmentId: z.number().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     from: z.number().optional(),
     count: z.number().optional(),
   },
-  async ({ query, from, count }) =>
+  async (args) =>
     run(() => {
       const params = optionalParams({
-        name: query,
-        from,
-        count: count ?? 25,
+        name: args.query,
+        number: args.number,
+        isClosed: args.isClosed,
+        isOffer: args.isOffer,
+        customerId: args.customerId,
+        projectManagerId: args.projectManagerId,
+        departmentId: args.departmentId,
+        fields: args.fields,
+        from: args.from,
+        count: args.count ?? 25,
       });
       return client.get("/project", params);
     })
@@ -647,13 +708,15 @@ server.tool(
   "Search activities (query → name).",
   {
     query: z.string().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     from: z.number().optional(),
     count: z.number().optional(),
   },
-  async ({ query, from, count }) =>
+  async ({ query, fields, from, count }) =>
     run(() => {
       const params = optionalParams({
         name: query,
+        fields,
         from,
         count: count ?? 50,
       });
@@ -668,6 +731,7 @@ server.tool(
     dateFrom: z.string(),
     dateTo: z.string(),
     employeeId: z.number().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     projectId: z.number().optional(),
     from: z.number().optional(),
     count: z.number().optional(),
@@ -678,6 +742,7 @@ server.tool(
         dateFrom: args.dateFrom,
         dateTo: args.dateTo,
         employeeId: args.employeeId,
+        fields: args.fields,
         projectId: args.projectId,
         from: args.from,
         count: args.count ?? 50,
@@ -716,15 +781,23 @@ server.tool(
   "Search employees; query is sent as firstName filter (see Tripletex /employee OpenAPI for more filters).",
   {
     query: z.string().optional(),
+    lastName: z.string().optional(),
+    employeeNumber: z.string().optional(),
+    departmentId: z.number().optional(),
+    fields: z.string().optional().describe("Tripletex `fields` expansion, e.g. \"id,name,customer(id,name)\" or \"*\""),
     from: z.number().optional(),
     count: z.number().optional(),
   },
-  async ({ query, from, count }) =>
+  async (args) =>
     run(() => {
       const params = optionalParams({
-        firstName: query,
-        from,
-        count: count ?? 25,
+        firstName: args.query,
+        lastName: args.lastName,
+        employeeNumber: args.employeeNumber,
+        departmentId: args.departmentId,
+        fields: args.fields,
+        from: args.from,
+        count: args.count ?? 25,
       });
       return client.get("/employee", params);
     })

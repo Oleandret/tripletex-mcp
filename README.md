@@ -11,7 +11,7 @@ Kontakt meg på carl@cwv.no.
 
 | Kategori | Verktøy | Beskrivelse |
 |---|---|---|
-| **Timeføring** | `search_projects` | Søk etter prosjekter |
+| **Timeføring** | `search_projects` | Søk etter prosjekter (filtre: `isClosed`, `customerId`, `projectManagerId`, `number`) |
 | | `search_activities` | Søk etter aktiviteter |
 | | `search_time_entries` | Hent timeoppføringer for en periode |
 | | `create_time_entry` | Logg timer (krever `employeeId` + prosjekt/aktivitet) |
@@ -21,6 +21,7 @@ Kontakt meg på carl@cwv.no.
 | | `search_invoices` | Søk utgående fakturaer (påkrevd datointervall) |
 | | `get_invoice` | Hent én faktura (valgfri `fields`) |
 | | `search_supplier_invoices` | Søk leverandørfakturaer (påkrevd datointervall) |
+| | `search_orders` | Søk ordrer i en periode (`isClosed=false` = åpne ordrer) |
 | **Kunder & leverandører** | `search_customers` | Søk kunder |
 | | `create_customer` | Opprett kunde |
 | | `update_customer` | Oppdater kunde |
@@ -34,7 +35,18 @@ Kontakt meg på carl@cwv.no.
 | | `get_voucher` | Hent bilag |
 | | `create_voucher` | Opprett bilag (`amountGross` per linje) |
 | **Utility** | `whoami` | Info om innlogget bruker/selskap |
-| | `search_employees` | Søk ansatte |
+| | `search_employees` | Søk ansatte (filtre: `lastName`, `employeeNumber`, `departmentId`) |
+
+### `fields` og paginering
+
+Alle søkeverktøyene tar Tripletex sin egen `fields`-parameter, som sendes rett videre til API-et. Uten den returnerer Tripletex bare standardfeltene, og nøstede objekter kommer tilbake som `{id, url}` uten navn:
+
+```
+search_projects  { isClosed: false, fields: "id,number,name,customer(id,name)" }
+search_invoices  { invoiceDateFrom: "2026-01-01", invoiceDateTo: "2026-12-31", fields: "*" }
+```
+
+`from` og `count` styrer paginering. Tripletex tillater maks 1000 rader per kall.
 
 ## Kom i gang
 
