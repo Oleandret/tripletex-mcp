@@ -8,7 +8,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { TripletexApiError, TripletexClient } from "./tripletex-client.js";
+import {
+  TripletexApiError,
+  TripletexClient,
+  type TripletexCredentials,
+} from "./tripletex-client.js";
 import {
   buildOrderBody,
   transformVoucherPosting,
@@ -16,21 +20,45 @@ import {
 } from "./tripletex-transform.js";
 import { registerSkills } from "./skills/registry.js";
 
-// Lazy-init client so the HTTP server can start and pass healthchecks
-// even before Tripletex tokens are configured.
-let _client: TripletexClient | null = null;
-function getClient(): TripletexClient {
-  if (!_client) {
-    _client = new TripletexClient();
-  }
-  return _client;
+/**
+ * Client whose construction is deferred to the first tool call, so the HTTP
+ * server starts and passes healthchecks even before credentials are configured
+ * — and so a session that supplies no credentials fails on use, not on connect.
+ */
+function lazyClient(credentials?: TripletexCredentials): TripletexClient {
+  let real: TripletexClient | null = null;
+  return new Proxy({} as TripletexClient, {
+    get(_target, prop) {
+      if (!real) real = new TripletexClient(credentials);
+      return (real as any)[prop];
+    },
+  });
 }
-// Keep a `client` getter for minimal diff in tool handlers
-const client = new Proxy({} as TripletexClient, {
-  get(_target, prop) {
-    return (getClient() as any)[prop];
-  },
-});
+
+/**
+ * Per-request credentials for the HTTP transport. Lets one deployment serve
+ * several companies, and keeps the endpoint URL alone from being enough to read
+ * the accounts. Returns undefined when no usable header is present, in which
+ * case the client falls back to the environment.
+ */
+function credentialsFromHeaders(
+  req: IncomingMessage
+): TripletexCredentials | undefined {
+  const pick = (name: string) => {
+    const raw = req.headers[name];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value && value.trim() ? value.trim() : undefined;
+  };
+  const credentials: TripletexCredentials = {
+    jwt: pick("x-tripletex-jwt"),
+    consumerToken: pick("x-tripletex-consumer-token"),
+    employeeToken: pick("x-tripletex-employee-token"),
+    env: pick("x-tripletex-env"),
+  };
+  return credentials.jwt || credentials.employeeToken
+    ? credentials
+    : undefined;
+}
 
 const server = new McpServer({
   name: "tripletex",
@@ -116,7 +144,7 @@ const orderLineSchema: z.ZodType<OrderLineInput> = z.object({
 // Tool registration function (used per-session for HTTP transport)
 // ===========================================================================
 
-function registerAllTools(server: McpServer) {
+function registerAllTools(server: McpServer, client: TripletexClient) {
 
 // ===========================================================================
 // INVOICES & ORDERS
@@ -954,8 +982,9 @@ async function main() {
             version: "2.0.0",
           });
 
-          // Re-register all tools on the session server
-          registerAllTools(sessionServer);
+          // Re-register all tools on the session server, bound to whatever
+          // credentials this client sent (falling back to the environment).
+          registerAllTools(sessionServer, lazyClient(credentialsFromHeaders(req)));
           registerSkills(sessionServer);
 
           await sessionServer.connect(transport);
@@ -1005,7 +1034,7 @@ async function main() {
     });
   } else {
     // --- stdio transport (default, for local usage) ---
-    registerAllTools(server);
+    registerAllTools(server, lazyClient());
     registerSkills(server);
     const transport = new StdioServerTransport();
     await server.connect(transport);

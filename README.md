@@ -132,6 +132,19 @@ Du trenger ikke tenke på dette — bare sett miljøvariablene.
 | `MCP_TRANSPORT` | `http` for Railway/remote (endepunkt `/mcp`). Standard `stdio` |
 | `PORT` | Port i HTTP-modus. Settes automatisk av Railway |
 
+### Nøkler per kall (HTTP-transport)
+
+I HTTP-modus kan klienten sende nøklene som headere i stedet for at de ligger i miljøet. Da holder ikke endepunkt-URL-en alene for å lese regnskapet, og én deploy kan betjene flere selskaper:
+
+| Header | Tilsvarer |
+|---|---|
+| `X-Tripletex-Jwt` | `TRIPLETEX_JWT` |
+| `X-Tripletex-Consumer-Token` | `TRIPLETEX_CONSUMER_TOKEN` |
+| `X-Tripletex-Employee-Token` | `TRIPLETEX_EMPLOYEE_TOKEN` |
+| `X-Tripletex-Env` | `TRIPLETEX_ENV` |
+
+Headerne leses når MCP-sesjonen opprettes (`initialize`), og gjelder for resten av sesjonen. Sendes ingen av dem, brukes miljøvariablene.
+
 ## Eksempler på bruk
 
 Når MCP-serveren er koblet til Claude, kan du si ting som:

@@ -28,6 +28,20 @@ export class TripletexApiError extends Error {
   }
 }
 
+/**
+ * Credentials passed in per client instance. Anything omitted falls back to the
+ * corresponding environment variable, so a single-tenant deployment can keep
+ * configuring everything through the environment.
+ */
+export interface TripletexCredentials {
+  jwt?: string;
+  consumerToken?: string;
+  employeeToken?: string;
+  /** "test" targets api-test.tripletex.tech. */
+  env?: string;
+  ttlSeconds?: number;
+}
+
 export class TripletexClient {
   private refreshToken: string;
   private consumerToken: string;
@@ -36,7 +50,7 @@ export class TripletexClient {
   private baseUrl: string;
   private session: SessionToken | null = null;
 
-  constructor() {
+  constructor(credentials: TripletexCredentials = {}) {
     // Two ways to authenticate, see
     // https://developer.tripletex.no/docs/documentation/authentication-and-tokens/
     //
@@ -46,23 +60,32 @@ export class TripletexClient {
     //   2. Commercial integration (many customers): consumer token from
     //      Tripletex + an employee token created by each end customer.
     const refresh =
-      process.env.TRIPLETEX_JWT || process.env.TRIPLETEX_REFRESH_TOKEN || "";
-    const consumer = process.env.TRIPLETEX_CONSUMER_TOKEN || "";
-    const employee = process.env.TRIPLETEX_EMPLOYEE_TOKEN || "";
+      credentials.jwt ||
+      process.env.TRIPLETEX_JWT ||
+      process.env.TRIPLETEX_REFRESH_TOKEN ||
+      "";
+    const consumer =
+      credentials.consumerToken || process.env.TRIPLETEX_CONSUMER_TOKEN || "";
+    const employee =
+      credentials.employeeToken || process.env.TRIPLETEX_EMPLOYEE_TOKEN || "";
     if (!refresh && !employee) {
       throw new Error(
         "Missing Tripletex credentials. Set TRIPLETEX_JWT (internal integration: " +
           "Selskap -> API-tokens in Tripletex), or TRIPLETEX_CONSUMER_TOKEN + " +
-          "TRIPLETEX_EMPLOYEE_TOKEN (commercial integration)."
+          "TRIPLETEX_EMPLOYEE_TOKEN (commercial integration). Over HTTP transport " +
+          "these can also be sent per request as X-Tripletex-Jwt / " +
+          "X-Tripletex-Consumer-Token / X-Tripletex-Employee-Token."
       );
     }
     this.refreshToken = refresh;
     this.consumerToken = consumer;
     this.employeeToken = employee;
     this.ttlSeconds =
-      Number(process.env.TRIPLETEX_SESSION_TTL_SECONDS) || DEFAULT_TTL_SECONDS;
-    this.baseUrl =
-      process.env.TRIPLETEX_ENV === "test" ? TEST_BASE : PROD_BASE;
+      credentials.ttlSeconds ||
+      Number(process.env.TRIPLETEX_SESSION_TTL_SECONDS) ||
+      DEFAULT_TTL_SECONDS;
+    const env = credentials.env || process.env.TRIPLETEX_ENV;
+    this.baseUrl = env === "test" ? TEST_BASE : PROD_BASE;
   }
 
   private async createSession(): Promise<void> {
